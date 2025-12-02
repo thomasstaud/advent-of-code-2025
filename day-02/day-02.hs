@@ -1,61 +1,41 @@
-part1 = process . ranges
-part2 = undefined
+part1 = process patterns1 . parse
+part2 = process patterns2 . parse
 
-ranges :: String -> [String]
-ranges [] = []
-ranges (',' : str) = [] : ranges str
-ranges (c : str) = case ranges str of
-    [] -> [[c]]
-    (head : tail) -> (c : head) : tail
+patterns1 str = [length str `div` 2]
+patterns2 str = [1..length str `div` 2]
 
-process :: [String] -> Int
-process = let
-    parse :: String -> (String, String)
-    parse str = let
+parse :: String -> [(String, String)]
+parse = let
+    splitComma :: Char -> [String] -> [String]
+    splitComma ',' xs = [] : xs
+    splitComma c [] = [[c]]
+    splitComma c (x:xs) = (c:x) : xs
+    cleanRanges :: [String] -> [(String, String)]
+    cleanRanges [] = []
+    cleanRanges (str : tail) = let
         (fst, snd) = span (/= '-') str
         lenLower = length fst
         lenUpper = length snd - 1 -- minus is still included
-        -- turns 90,110 into 90,99 and 990,1100 into 1000,1100
         clean (fst, snd)
-            | lenLower == lenUpper = (fst, drop 1 snd)
-            | even lenLower = (fst, replicate lenLower '9')
-            | otherwise = ('1':replicate (lenUpper-1) '0', drop 1 snd)
-        in clean (fst, snd)
-    in sum . map (scanRange . parse)
+            | lenLower == lenUpper = [(fst, drop 1 snd)]
+            | otherwise = [(fst, replicate lenLower '9'), ('1':replicate (lenUpper-1) '0', drop 1 snd)]
+        in clean (fst, snd) ++ cleanRanges tail
+    in cleanRanges . foldr splitComma []
 
 
-mapTuple :: (a -> b) -> (a, a) -> (b, b)
-mapTuple f (x, y) = (f x, f y)
 
-scanRange :: (String, String) -> Int
-scanRange (lower, upper)
-    | odd $ length lower = 0
-    | head <= tail = concatFactor * ((tail-head+1) * (head+tail)) `div` 2
-    | otherwise = 0
+process :: (String -> [Int]) -> [(String, String)] -> Int
+process patterns = let
+    expand :: [(String, String)] -> [String]
+    expand [] = []
+    expand ((lower, upper) : tail) = map show [read lower..read upper :: Int] ++ expand tail
+    in sum . map read . filter (isInvalid patterns) . expand
+
+isInvalid :: (String -> [Int]) -> String -> Bool
+isInvalid patterns str = or [invalid | step <- patterns str, step /= 0, let invalid = check str step]
     where
-        partLength = length lower `div` 2
-        parse :: String -> (Int, Int)
-        parse str = mapTuple read $ splitAt partLength str
-        (fstLower, sndLower) = parse lower
-        (fstUpper, sndUpper) = parse upper
-        concatFactor = read $ '1' : replicate (partLength - 1) '0' ++ ['1']
-
-        head = fstLower + if fstLower < sndLower then 1 else 0
-        tail = fstUpper - if fstUpper > sndUpper then 1 else 0
-
-{- generating invalid ids:
-    - for the lower bound, check if it would be in range (store x)
-    - for the upper bound, check if it would be in range (store y)
-    - if yes to both, xx + (x+1)(x+1) + ... + (y-1)(y-1) + yy is the result
-    - otherwise, exclude xx and/or yy
-
-    123 + 124 + 125 = ((125-123+1) * (123+125)) /2
--}
-
-{- strategy:
-    - e.g. 123456 - 126789
-    - for the lower end, check if [first half][first half] is still within bounds = 123123 x
-    - substract first half of lower end from first half of upper end = 3, subtract 1 = 2   y
-    - for the upper end, check if [first half][first half] is still within bounds = 126126 z
-    - res = x + y + z = 3
--}
+        len = length str
+        check :: String -> Int -> Bool
+        check str step
+            | len `mod` step /= 0 = False
+            | otherwise = concat (replicate (len `div` step) (take step str)) == str
