@@ -1,15 +1,13 @@
-import Data.Char (ord)
+import Data.Char (ord, chr)
 
-part1 = map process . lines
+part1 = sum . map process . lines
 
--- process one line
-{- strategy:
-    - x = max digit excluding last battery
-    - y = max digit to the right of the leftmost appearance of x
-    - result = 10 * x + y
--}
 process :: String -> Int
 process str = let
-    maxDigit s = (ord . maximum) s - ord '0'
-    digit1 = (maxDigit . drop 1 . reverse) str
-    in digit1
+    xs = map (\ c -> ord c - ord '0') str
+    -- apply function f on xs, then find maximum excluding first index
+    findMax f = maximum . drop 1 . f $ xs
+    digit1 = findMax reverse
+    digit2 = findMax $ dropWhile (/= digit1)
+    in 10 * digit1 + digit2
+
