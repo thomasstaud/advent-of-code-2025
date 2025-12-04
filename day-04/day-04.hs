@@ -1,6 +1,21 @@
 part1 str = let
     mat = parse str
-    in eval (stripMat mat) . mapToAdj $ mat
+    initial = stacks mat
+    final = stacks $ reduce (stripMat mat) . mapToAdj $ mat
+    in initial - final
+
+part2 str = let
+    mat = parse str
+    initial = stacks mat
+    in step 0 initial mat
+
+step :: Int -> Int -> [[Bool]] -> Int
+step acc prev mat
+    | prev == next = acc
+    | otherwise = step (acc+prev-next) next reduced
+    where
+        reduced = reduce (stripMat mat) . mapToAdj $ mat
+        next = stacks reduced
 
 -- paper stack matrix with extended edges
 parse :: String -> [[Bool]]
@@ -38,7 +53,12 @@ countAdj (t1:t2:t3:ts, m1:m2:m3:ms, b1:b2:b3:bs) =
     (length . filter id $ [t1, t2, t3, m1, m3, b1, b2, b3])
     : countAdj (t2:t3:ts, m2:m3:ms, b2:b3:bs)
 
-eval :: [[Bool]] -> [[Int]] -> Int
-eval mat adj = let
-    isAccessible (isStack, adj) = isStack && adj < 4
-    in sum [length acc | (matRow, adjRow) <- zip mat adj, let acc = filter isAccessible (zip matRow adjRow)]
+-- removes all accessible stacks
+reduce :: [[Bool]] -> [[Int]] -> [[Bool]]
+reduce mat adj = let
+    inaccessible (isStack, adj) = isStack && adj >= 4
+    in [[inaccessible pair | pair <- zip matRow adjRow] | (matRow, adjRow) <- zip mat adj]
+
+-- count stacks in the matrix
+stacks :: [[Bool]] -> Int
+stacks mat = sum [length . filter id $ row | row <- mat]
