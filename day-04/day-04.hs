@@ -37,11 +37,11 @@ expandMat mat = let
 
 -- checks how many of the adjacent tiles have paper
 countAdj :: ([Bool], [Bool], [Bool]) -> [Int]
-countAdj ([t1, t2, t3], [m1, m2, m3], [b1, b2, b3]) =
-    [length . filter id $ [t1, t2, t3, m1, m3, b1, b2, b3]]
-countAdj (t1:t2:t3:ts, m1:m2:m3:ms, b1:b2:b3:bs) =
-    (length . filter id $ [t1, t2, t3, m1, m3, b1, b2, b3])
-    : countAdj (t2:t3:ts, m2:m3:ms, b2:b3:bs)
+countAdj (top, [l, check, r], btm) =
+    [length . filter id $ l : r : top ++ btm]
+countAdj (top, mid@(l:check:r:_), btm) =
+    (length . filter id $ l : r : take 3 top ++ take 3 btm)
+    : countAdj (drop 1 top, drop 1 mid, drop 1 btm)
 
 -- removes all accessible stacks
 reduce :: [[Bool]] -> [[Int]] -> [[Bool]]
