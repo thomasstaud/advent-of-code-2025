@@ -1,7 +1,7 @@
 part1 str = let
     mat = parse str
     initial = stacks mat
-    final = stacks $ reduce (stripMat mat) . mapToAdj $ mat
+    final = stacks $ reduce mat . mapToAdj $ mat
     in initial - final
 
 part2 str = let
@@ -14,36 +14,26 @@ step acc prev mat
     | prev == next = acc
     | otherwise = step (acc+prev-next) next reduced
     where
-        reduced = reduce (stripMat mat) . mapToAdj $ mat
+        reduced = reduce mat . mapToAdj $ mat
         next = stacks reduced
 
--- paper stack matrix with extended edges
+-- paper stack matrix
 parse :: String -> [[Bool]]
-parse str = [replicate width False]
-    ++ [[c == '@' | c <- '.':line++['.']] | line <- lines str]
-    ++ [replicate width False]
-    where
-        width = (length . takeWhile (/= '\n')) str + 2
+parse str = [[c == '@' | c <- line] | line <- lines str]
 
-{- strategy:
-    - go through area in 9x9 patches
-    - check each patch and map
--}
 -- maps each coord to the number of adjacent paper stacks
 mapToAdj :: [[Bool]] -> [[Int]]
 mapToAdj mat = map countAdj $ expandMat mat
 
 expandMat :: [[Bool]] -> [([Bool], [Bool], [Bool])]
-expandMat mat = [(t,m,b) |
-    (t, i) <- zip (reverse . drop 2 . reverse $ mat) [0..],
-    let m = mat !! (i+1),
-    let b = mat !! (i+2)]
-
--- remove outer rows/cols
-stripMat :: [[a]] -> [[a]]
-stripMat = let
-    strip = reverse . drop 1 . reverse . drop 1
-    in map strip . strip
+expandMat mat = let
+    -- expand mat with a row/col of 'False'
+    width = length . head $ mat
+    extraRow = replicate (width+2) False
+    mat' = [extraRow] ++ map (\ row -> [False] ++ row ++ [False]) mat ++ [extraRow]
+    in [(t,m,b) | (t, i) <- zip (reverse . drop 2 . reverse $ mat') [0..],
+        let m = mat' !! (i+1),
+        let b = mat' !! (i+2)]
 
 -- checks how many of the adjacent tiles have paper
 countAdj :: ([Bool], [Bool], [Bool]) -> [Int]
