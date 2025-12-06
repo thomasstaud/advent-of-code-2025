@@ -1,42 +1,36 @@
-part1 = process . parse1
-part2 = process . parse2
+part1 = process . parse parseHorizontal
+part2 = process . parse parseVertical
 
-type Operator = (Int -> Int -> Int, Int)
 
-parse1 :: String -> ([[Int]], [Operator])
-parse1 str = let
-    ([opStrs], numStrs) = splitAt 1 . reverse $ (map words . lines $ str)
-    mapOp "+" = ((+), 0)
-    mapOp "*" = ((*), 1)
-    ops = map mapOp opStrs
-    nums = parseHorizontal (map (map read) numStrs)
-    in (nums, ops)
+parseHorizontal :: [String] -> [[Int]]
+parseHorizontal = transpose . map (map read . words)
 
-parse2 :: String -> ([[Int]], [Operator])
-parse2 str = let
-    ([opStrs], numStrs) = splitAt 1 . reverse $ lines str
-    mapOp "+" = ((+), 0)
-    mapOp "*" = ((*), 1)
-    ops = map mapOp . words $ opStrs
-    nums = parseVertical numStrs
-    in (nums, ops)
-
-parseHorizontal :: [[Int]] -> [[Int]]
-parseHorizontal ([]:_) = [[]]
-parseHorizontal nums = let
-    res = map head nums
-    moreNums = map (drop 1) nums
-    in res : parseHorizontal moreNums
+transpose :: [[Int]] -> [[Int]]
+transpose ([]:_) = [[]]
+transpose rows = let
+    col = map head rows
+    moreRows = map (drop 1) rows
+    in col : transpose moreRows
 
 parseVertical :: [String] -> [[Int]]
 parseVertical ("":_) = [[]]
 parseVertical numStrs = let
-    str = reverse $ map head numStrs
+    col = reverse $ map head numStrs
     tail = parseVertical $ map (drop 1) numStrs
-    in if all (== ' ') str
+    in if all (== ' ') col
         then [] : tail
         else case tail of
-            x:xs -> (read str : x) : xs
+            x:xs -> (read col : x) : xs
+
+type Operator = (Int -> Int -> Int, Int)
+parse :: ([String] -> [[Int]]) -> String -> ([[Int]], [Operator])
+parse numParser str = let
+    ([opStrs], numStrs) = splitAt 1 . reverse $ lines str
+    mapOp "+" = ((+), 0)
+    mapOp "*" = ((*), 1)
+    ops = map mapOp . words $ opStrs
+    nums = numParser numStrs
+    in (nums, ops)
 
 
 process :: ([[Int]], [Operator]) -> Int
