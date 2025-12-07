@@ -1,19 +1,21 @@
-part1 = process [] . lines
+part1 = fst . process [] . lines
+part2 = sum . snd . process [] . lines
 
-process :: [Bool] -> [String] -> Int
-process b = fst . foldl step (0,b)
+process :: [Int] -> [String] -> (Int, [Int])
+process b = foldl step (0,b)
 
-step :: (Int, [Bool]) -> String -> (Int, [Bool])
-step (0,[]) line = step (0, replicate (length line) False) line
+step :: (Int, [Int]) -> String -> (Int, [Int])
+step (0,[]) line = step (0, replicate (length line) 0) line
 step (acc, beams) line = let
-    isPassing isBeam c = c == '.' && isBeam || c == 'S'
-    isHitSplitter isBeam c = c == '^' && isBeam
-    passingBeams = zipWith isPassing beams line
-    splittersHit = zipWith isHitSplitter beams line
+    numPassing _ 'S' = 1
+    numPassing numBeams c = if c == '.' then numBeams else 0
+    numSplit numBeams c = if c == '^' then numBeams else 0
+    passingBeams = zipWith numPassing beams line
+    splittersHit = zipWith numSplit beams line
     splitBeams = shiftBeams (splittersHit !! 1) splittersHit
-    acc' = acc + length (filter id splittersHit)
-    in (acc', zipWith (||) passingBeams splitBeams)
+    acc' = acc + length (filter (/= 0) splittersHit)
+    in (acc', zipWith (+) passingBeams splitBeams)
 
-shiftBeams :: Bool -> [Bool] -> [Bool]
+shiftBeams :: Int -> [Int] -> [Int]
 shiftBeams prev [l,_] = [prev, l]
-shiftBeams prev (l:x:r:xs) = prev : shiftBeams (l || r) (x:r:xs)
+shiftBeams prev (l:x:r:xs) = prev : shiftBeams (l + r) (x:r:xs)
