@@ -2,8 +2,14 @@ import Data.Char (digitToInt)
 import GHC.Float (roundFloat)
 import Data.List (partition)
 
-part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . take 1 . lines
-part2' = map (solveLin . machineToLin . toMachine) . take 1 . lines
+part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . lines
+
+f = minimizeSum . solveLin . machineToLin . toMachine
+g = solveLin . machineToLin . toMachine
+
+-- unsolved
+-- [54,55,60,75,92,107,118,135,141,156,166]
+-- [-- 55,60,75,92,--- 118,135,--- --- 166]
 
 type Lights = [Bool]
 type Button = [Int]
@@ -88,17 +94,72 @@ machineToLin (Machine _ buttons joltage) = let
 
 arbitraryMaximum = 10
 
--- find values from [0..] for all n variables such that all terms are >= 0 and the sum of terms is minimal
-minimizeSum :: [Term] -> [Int]
+{- new strategy 2:
+    for every variable, plug in the values from 0 to an arbitrary n and see what works best
+    -> we have a maximum of 4 variables
+    -> that gives us n^4 combinations to try at most
+    -> i think trying 100_000 combinations at most is fine
+    -> that would give us an n of 17 ... it might just work
+-}
+n len = 40 * (4 ^ (4-len))
+minimizeSum :: [Term] -> Int
 minimizeSum terms = let
-    in map (eval (optimalAssignment terms)) terms
+    len = length (head terms)-1
+    n' = n len - 1
+    nums = [[0..n'] | _ <- [1..len]]
+    -- append every x to every y
+    combo :: [Int] -> [[Int]] -> [[Int]]
+    combo xs ys = [x:y | x <- xs, y <- ys]
+    assignments = foldr combo [[]] nums
+    evalAssignment :: Assignment -> Int
+    evalAssignment a = let
+        ts = map (eval a) terms
+        valid = all (>= 0) ts
+        in if valid then sum ts else 100000
+    in minimum (map evalAssignment assignments)
+
+-- i have solid answers except for these 11:
+-- [54,55,60,75,92,107,118,135,141,156,166]
+
+{-
+-- find values from [0..] for all n variables such that all terms are >= 0 and the sum of terms is minimal
+optimalAssignment ts
+    | length (head ts) == 1 = []
+    | otherwise = let
+    tree = [(x, var : opt) | var <- [0..n],
+        let ts' = map (evalStep var) ts,
+        let opt = optimalAssignment ts',
+        let presses = map (eval (var : opt)) ts,
+        all (>= 0) presses,
+        let x = sum presses]
+    optimal = snd $ minimum tree
+    in optimal
+
+{- new strategy:
+    - find minimum values for every var
+    - sum up all vars
+    - do a magic trick
+-}
+    optimalAssignment ts = let
+    ([t1], tail) = splitAt 1 ts
+    sumTerm = foldr (zipWith (+)) t1 tail
+    in sumTerm
+
+    findLowestValid tentative pos
+        | all (\ t -> eval assignment t >= 0) ts' = tentative
+        | tentative == arbitraryMaximum = -1
+        | otherwise = findLowestValid (tentative + 1) pos
+        where
+            len = length (head ts)
+            assignment = replicate (pos-1) 0 ++ [tentative] ++ replicate (len-pos-1) 0
+            ts' = filter (\ t -> t !! pos /= 0) ts
 
 -- optimizing for one variable:
         -- find lowest value such that all terms are >= 0
         -- from there, keep incrementing and determine min value recursively
         -- stop when a term is < 0 or at arbitrary exit value (bad)
-optimalAssignment :: [Term] -> [Int]
-optimalAssignment ts
+        
+    optimalAssignment ts
     | length (head ts) == 1 = []
     | otherwise = let
     -- only terms containing the variable are relevant
@@ -124,6 +185,7 @@ optimalAssignment ts
     in map fst tree
     where
         validTerm (x:xs) = x >= 0 || any (/= 0) xs
+-}
 
 -- solve a system of linear equations
 --  returns a term for every component
