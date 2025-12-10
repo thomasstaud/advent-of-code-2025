@@ -1,8 +1,9 @@
 import Data.Char (digitToInt)
+import GHC.Float (roundFloat)
+import Data.List (partition)
 
-part1 = sum . map (minLightPresses . toMachine) . lines
-part2 = map (minJoltPresses . toMachine) . lines
-part2lin = map (minimizeSum . solveLin . machineToLin . toMachine) . lines
+-- part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . lines
+part2 = map (solveLin . machineToLin . toMachine) . lines
 
 type Lights = [Bool]
 type Button = [Int]
@@ -32,44 +33,9 @@ toMachine line = let
         (tail, []) -> [read . reverse . drop 1 . reverse $ tail]
     in Machine (parseLights lightStr) (map parseButton buttonStrs) (parseJoltage joltStr)
 
--- determine number of required button presses for the lights of one machine
-minLightPresses :: Machine -> Int
-minLightPresses (Machine lights buttons _) = let
-    update = step (const True) flipLights buttons
-    -- start from both start & goal and meet in the middle for optimization
-    match n leftStates rightStates
-        | any (`elem` leftStates) rightStates = n
-        | even n = match (n+1) leftStates (update rightStates)
-        | otherwise = match (n+1) (update leftStates) rightStates
-    in match 0 [replicate (length lights) False] [lights]
-
--- determine number of required button presses for the joltage of one machine
-minJoltPresses :: Machine -> Int
-minJoltPresses (Machine _ buttons joltage) = let
-    validate state = null [j | (j, target) <- zip state joltage, j < 0 || j > target]
-    update op = step validate (changeJolt op) buttons
-    -- start from both start & goal and meet in the middle for optimization
-    match n leftStates rightStates
-        | any (`elem` leftStates) rightStates = n
-        | even n = match (n+1) leftStates (update (-) rightStates)
-        | otherwise = match (n+1) (update (+) leftStates) rightStates
-    in match 0 [replicate (length joltage) 0] [joltage]
-
--- press each button for every state
-step :: (state -> Bool) -> (Button -> state -> state) -> [Button] -> [state] -> [state]
-step valid press buttons states = concatMap (\ b -> (filter valid . map (press b)) states) buttons
-
-flipLights :: Button -> Lights -> Lights
-flipLights b lights = [l' | (l, i) <- zip lights [0..], let l' = if i `elem` b then not l else l]
-
-changeJolt :: (Int -> Int -> Int) -> Button -> Joltage -> Joltage
-changeJolt op b joltage = [j' | (j, i) <- zip joltage [0..], let j' = if i `elem` b then op j 1 else j]
 
 
-
--- alternative solution:
-
--- transform part 2 into system of linear equations
+-- transform into system of linear equations
 --  ex 1: (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
 --         x1  x2    x3  x4    x5    x6    b
 -- x5+x6=3
@@ -96,6 +62,7 @@ changeJolt op b joltage = [j' | (j, i) <- zip joltage [0..], let j' = if i `elem
 --      i.e. 1+2+0+4+0+3 = 10
 
 type Matrix = [[Int]]
+type FMatrix = [[Float]]
 
 -- we can write all terms as x0*1 + x1*a + x2*b + ...
 --  where xi is defined and a,b,.. are variables
@@ -112,7 +79,11 @@ eval a term = sum [coeff * a pos | (coeff, pos) <- zip term [0..]]
 -- find values from [0..] for all n variables such that all terms are >= 0 and the sum of terms is minimal
 minimizeSum :: [Term] -> Int
 minimizeSum terms = let
-    optimalAssignment = undefined
+    -- optimizing for one variable:
+        -- find lowest value such that all terms are >= 0
+        -- from there, keep incrementing and determine min value recursively
+        -- stop when a term is < 0 or at arbitrary exit value (dirty)
+    optimalAssignment = const 1
     in sum $ map (eval optimalAssignment) terms
 
 -- >> machineToLin . toMachine . head . lines $ x
@@ -126,7 +97,8 @@ machineToLin (Machine _ buttons joltage) = let
 --  returns a term for every component
 solveLin :: Matrix -> [Term]
 solveLin mat = let
-    (ref, free) = gauss mat
+    (fref, free) = gauss (map (map fromIntegral) mat)
+    ref = map (map roundFloat) fref
     numFree = length free
     trivialTerms = [[if j == i then 1 else 0 | j <- [0..numFree]] | i <- [1..numFree]]
     toTerm line = let
@@ -134,22 +106,43 @@ solveLin mat = let
         buildTerm (x:xs) n
             | n `elem` free = -x : buildTerm xs (n+1)
             | otherwise = buildTerm xs (n+1)
-        in buildTerm line 0
+        in reverse (buildTerm line 0)
     in map toTerm ref ++ trivialTerms
 
 -- transform expanded coefficient matrix into RREF
 --  return matrix along with column indices of free variables
-gauss :: Matrix -> (Matrix, [Int])
+gauss :: FMatrix -> (FMatrix, [Int])
 gauss mat = let
-    -- 1.1 move a row with a 1 in the first column to the very top
-    mat' = case span (\ line -> head line == 0) mat of
-        (above, row : below) -> row : above ++ below
-        _ -> error "go to next column"
-    -- 1.2 eliminate all other values in that column
-    mat'' = let
-        ([line], lines) = splitAt 1 mat'
+    step mat n
+        | length (head mat) == n+1 = (mat, [])
+        | otherwise = let
+            (mat', hasPivot) = gaussStep mat n
+            (mat'', freeVars) = step mat' (n+1)
+            in (mat'', [n | not hasPivot] ++ freeVars)
+    in step mat 0
+
+-- perform gaussian elimination in column n
+--  returns the updated matrix and a bool whether the column has a pivot
+--  if it has no pivot, the matrix does not change
+gaussStep :: FMatrix -> Int -> (FMatrix, Bool)
+gaussStep mat n
+    | length (head mat) == n+1 = (mat, True) -- last column has a "pivot" (this is meaningless)
+    | otherwise = let
+    -- 1. move a row with no 0 in the nth column to the nth position
+    pivotToTop = let
+        (above, row : below) = span (\ line -> (line !! n) == 0) bottom
+        -- 2. divide that row by the value of the first element
+        row' = map (/ row !! n) row
+        in top ++ row' : above ++ below
+    -- 3. eliminate all other values in that column
+    colEliminated = let
+        ([(line, _)], lines') = partition (\ (l, i) -> i == n) (zip pivotToTop [0..])
+        lines = map fst lines'
         -- if val is not 1, we have a problem
-        val = head line
-        elim l = zipWith (\ mji m1i -> mji - m1i * head l) l line
-        in line : map elim lines 
-    in (mat'', [])
+        val = line !! n
+        elim l = zipWith (\ mji m1i -> mji - m1i * (l !! n)) l line
+        in line : map elim lines
+    (top, bottom) = splitAt n mat
+    hasPivot = any (\ line -> (line !! n) /= 0) bottom
+    mat' = if hasPivot then colEliminated else mat
+    in (mat', hasPivot)
