@@ -2,8 +2,8 @@ import Data.Char (digitToInt)
 import GHC.Float (roundFloat)
 import Data.List (partition)
 
--- part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . lines
-part2 = map (solveLin . machineToLin . toMachine) . lines
+part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . take 1 . lines
+part2' = map (solveLin . machineToLin . toMachine) . take 1 . lines
 
 type Lights = [Bool]
 type Button = [Int]
@@ -69,22 +69,15 @@ type FMatrix = [[Float]]
 --  each term can now be represented as [x0, x1, x2, ...]
 type Term = [Int]
 -- assigns a value to each variable by its position
---  1 should always be assigned to 0 (0 -> 1)
-type Assignment = (Int -> Int)
+--  should be one shorter than the term
+type Assignment = [Int]
 
 -- assumes that assigment is complete
 eval :: Assignment -> Term -> Int
-eval a term = sum [coeff * a pos | (coeff, pos) <- zip term [0..]]
+eval a term = head $ foldr evalStep term a
 
--- find values from [0..] for all n variables such that all terms are >= 0 and the sum of terms is minimal
-minimizeSum :: [Term] -> Int
-minimizeSum terms = let
-    -- optimizing for one variable:
-        -- find lowest value such that all terms are >= 0
-        -- from there, keep incrementing and determine min value recursively
-        -- stop when a term is < 0 or at arbitrary exit value (dirty)
-    optimalAssignment = const 1
-    in sum $ map (eval optimalAssignment) terms
+evalStep :: Int -> Term -> Term
+evalStep n (x1:x2:xs) = x1 + n*x2 : xs
 
 -- >> machineToLin . toMachine . head . lines $ x
 machineToLin :: Machine -> Matrix
@@ -92,6 +85,45 @@ machineToLin (Machine _ buttons joltage) = let
     mapButton n button = if n `elem` button then 1 else 0
     createLine n = map (mapButton n) buttons ++ [joltage !! n]
     in map createLine [0..length joltage - 1]
+
+arbitraryMaximum = 10
+
+-- find values from [0..] for all n variables such that all terms are >= 0 and the sum of terms is minimal
+minimizeSum :: [Term] -> [Int]
+minimizeSum terms = let
+    in map (eval (optimalAssignment terms)) terms
+
+-- optimizing for one variable:
+        -- find lowest value such that all terms are >= 0
+        -- from there, keep incrementing and determine min value recursively
+        -- stop when a term is < 0 or at arbitrary exit value (bad)
+optimalAssignment :: [Term] -> [Int]
+optimalAssignment ts
+    | length (head ts) == 1 = []
+    | otherwise = let
+    -- only terms containing the variable are relevant
+    ts' = filter (\ (_:t:_) -> t /= 0) ts
+    findLowestValid tentative
+        | all (validTerm . evalStep tentative) ts' = tentative
+        | tentative == arbitraryMaximum = -1
+        | otherwise = findLowestValid (tentative + 1)
+    findHighestValid tentative
+        | tentative == arbitraryMaximum = arbitraryMaximum
+        | all (validTerm . evalStep tentative) ts' = findHighestValid (tentative + 1)
+        | otherwise = tentative - 1
+
+    lowestValid = findLowestValid 0
+    highestValid = findHighestValid lowestValid
+    tree = [(x, v:opt) | v <- [lowestValid..highestValid],
+        let ts'' = map (evalStep v) ts,
+        let opt = optimalAssignment ts'',
+        let x = sum $ map (eval (v:opt)) ts]
+    optimal = if null ts'
+        then optimalAssignment (map (evalStep 0) ts)
+        else (snd . minimum) tree
+    in map fst tree
+    where
+        validTerm (x:xs) = x >= 0 || any (/= 0) xs
 
 -- solve a system of linear equations
 --  returns a term for every component
@@ -125,9 +157,7 @@ gauss mat = let
 --  returns the updated matrix and a bool whether the column has a pivot
 --  if it has no pivot, the matrix does not change
 gaussStep :: FMatrix -> Int -> (FMatrix, Bool)
-gaussStep mat n
-    | length (head mat) == n+1 = (mat, True) -- last column has a "pivot" (this is meaningless)
-    | otherwise = let
+gaussStep mat n = let
     -- 1. move a row with no 0 in the nth column to the nth position
     pivotToTop = let
         (above, row : below) = span (\ line -> (line !! n) == 0) bottom
