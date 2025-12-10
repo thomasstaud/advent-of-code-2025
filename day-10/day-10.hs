@@ -32,10 +32,11 @@ process :: Machine -> Int
 process (Machine lights buttons _) = let
     -- optimization idea: start from lights as well and meet in the middle
     --  (should halve the exponentiation of states)
-    loop n states
-        | lights `elem` states = n
-        | otherwise = loop (n+1) (step buttons states)
-    in loop 0 [replicate (length lights) False]
+    match n leftStates rightStates
+        | any (`elem` leftStates) rightStates = n
+        | even n = match (n+1) leftStates (step buttons rightStates)
+        | otherwise = match (n+1) (step buttons leftStates) rightStates
+    in match 0 [replicate (length lights) False] [lights]
 
 -- press each button for every set of lights
 step :: [Button] -> [Lights] -> [Lights]
