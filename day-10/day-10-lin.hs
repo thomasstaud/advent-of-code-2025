@@ -1,5 +1,4 @@
 import Data.Char (digitToInt)
-import GHC.Float (roundFloat)
 import Data.List (partition)
 
 part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . lines
@@ -7,13 +6,15 @@ part2 = map (minimizeSum . solveLin . machineToLin . toMachine) . lines
 f = minimizeSum . solveLin . machineToLin . toMachine
 g = solveLin . machineToLin . toMachine
 
--- unsolved
--- [54,55,60,75,92,107,118,135,141,156,166]
--- [-- 55,60,75,92,--- 118,135,--- --- 166]
+-- guess: 18321+?50?, 18371 ( too low )
+-- actual value determined by stolen script: 18387
+
+-- current results (big one might be a 50?):
+-- [49,83,65,100,224,220,266,279,73,50,195,220,123,89,57,99,64,66,104,234,36,129,226,8,23,58,168,38,25,63,185,190,92,160,86,43,74,120,48,25,293,50,15,103,94,164,68,126,22,131,38,246,39,235,110,44,77,204,206,77,64,221,88,61,38,33,42,116,46,55,67,119,245,70,77,68,84,70,79,43,202,42,63,56,56,88,234,84,43,54,42,72,43,54,112,60,67,16,55,107,35,36,219,220,288,78,243,194,81,223,62,70,57,42,267,62,212,103,51,100000,89,121,124,133,243,72,67,103,19,76,30,114,110,43,53,293,84,149,16,43,221,65,60,233,7,81,59,35,59,54,42,74,102,91,110,233,248,106,27,11,74,80,84,146,98,58,214,49,100,51,69,106,70,67,66,188,39,58,72,154]
 
 type Lights = [Bool]
-type Button = [Int]
-type Joltage = [Int]
+type Button = [Double]
+type Joltage = [Double]
 data Machine = Machine Lights [Button] Joltage deriving Show
 
 toMachine :: String -> Machine
@@ -31,7 +32,7 @@ toMachine line = let
         '(' -> parseButton str
         ',' -> parseButton str
         ')' -> []
-        _ -> digitToInt c : parseButton str
+        _ -> fromIntegral(digitToInt c) : parseButton str
     parseJoltage ('{':str) = parseJoltage str
     parseJoltage str = case span (/= ',') str of
         (numStr, ',':tail) -> read numStr : parseJoltage tail
@@ -67,132 +68,53 @@ toMachine line = let
 --      here e.g. a = 3, b = 4
 --      i.e. 1+2+0+4+0+3 = 10
 
-type Matrix = [[Int]]
-type FMatrix = [[Float]]
+type Matrix = [[Double]]
 
 -- we can write all terms as x0*1 + x1*a + x2*b + ...
 --  where xi is defined and a,b,.. are variables
 --  each term can now be represented as [x0, x1, x2, ...]
-type Term = [Int]
+type Term = [Double]
 -- assigns a value to each variable by its position
 --  should be one shorter than the term
-type Assignment = [Int]
+type Assignment = [Double]
 
 -- assumes that assigment is complete
-eval :: Assignment -> Term -> Int
-eval a term = head $ foldr evalStep term a
+eval :: Assignment -> Term -> Double
+eval a term = head $ foldl evalStep term a
 
-evalStep :: Int -> Term -> Term
-evalStep n (x1:x2:xs) = x1 + n*x2 : xs
+evalStep :: Term -> Double -> Term
+evalStep (x1:x2:xs) n = x1 + n*x2 : xs
 
 -- >> machineToLin . toMachine . head . lines $ x
 machineToLin :: Machine -> Matrix
 machineToLin (Machine _ buttons joltage) = let
-    mapButton n button = if n `elem` button then 1 else 0
+    mapButton n button = if fromIntegral n `elem` button then 1 else 0
     createLine n = map (mapButton n) buttons ++ [joltage !! n]
     in map createLine [0..length joltage - 1]
 
-arbitraryMaximum = 10
-
-{- new strategy 2:
-    for every variable, plug in the values from 0 to an arbitrary n and see what works best
-    -> we have a maximum of 4 variables
-    -> that gives us n^4 combinations to try at most
-    -> i think trying 100_000 combinations at most is fine
-    -> that would give us an n of 17 ... it might just work
+{- heuristic strategy:
+    for every variable, plug in the values from 0 to the maximum possible and see what works best
 -}
-n len = 40 * (4 ^ (4-len))
-minimizeSum :: [Term] -> Int
-minimizeSum terms = let
+minimizeSum :: ([Term], [Double]) -> Double
+minimizeSum (terms, maxes) = let
     len = length (head terms)-1
-    n' = n len - 1
-    nums = [[0..n'] | _ <- [1..len]]
+    nums = [[0..maxes !! i] | i <- [0..len-1]]
     -- append every x to every y
-    combo :: [Int] -> [[Int]] -> [[Int]]
+    combo :: [Double] -> [[Double]] -> [[Double]]
     combo xs ys = [x:y | x <- xs, y <- ys]
     assignments = foldr combo [[]] nums
-    evalAssignment :: Assignment -> Int
+    evalAssignment :: Assignment -> Double
     evalAssignment a = let
         ts = map (eval a) terms
-        valid = all (>= 0) ts
-        in if valid then sum ts else 100000
+        valid = all (\ t -> t >= 0 && t - fromIntegral (round t) < 0.01) ts
+        in if valid then sum ts else 100000000 -- could not find a solution
     in minimum (map evalAssignment assignments)
 
--- i have solid answers except for these 11:
--- [54,55,60,75,92,107,118,135,141,156,166]
-
-{-
--- find values from [0..] for all n variables such that all terms are >= 0 and the sum of terms is minimal
-optimalAssignment ts
-    | length (head ts) == 1 = []
-    | otherwise = let
-    tree = [(x, var : opt) | var <- [0..n],
-        let ts' = map (evalStep var) ts,
-        let opt = optimalAssignment ts',
-        let presses = map (eval (var : opt)) ts,
-        all (>= 0) presses,
-        let x = sum presses]
-    optimal = snd $ minimum tree
-    in optimal
-
-{- new strategy:
-    - find minimum values for every var
-    - sum up all vars
-    - do a magic trick
--}
-    optimalAssignment ts = let
-    ([t1], tail) = splitAt 1 ts
-    sumTerm = foldr (zipWith (+)) t1 tail
-    in sumTerm
-
-    findLowestValid tentative pos
-        | all (\ t -> eval assignment t >= 0) ts' = tentative
-        | tentative == arbitraryMaximum = -1
-        | otherwise = findLowestValid (tentative + 1) pos
-        where
-            len = length (head ts)
-            assignment = replicate (pos-1) 0 ++ [tentative] ++ replicate (len-pos-1) 0
-            ts' = filter (\ t -> t !! pos /= 0) ts
-
--- optimizing for one variable:
-        -- find lowest value such that all terms are >= 0
-        -- from there, keep incrementing and determine min value recursively
-        -- stop when a term is < 0 or at arbitrary exit value (bad)
-        
-    optimalAssignment ts
-    | length (head ts) == 1 = []
-    | otherwise = let
-    -- only terms containing the variable are relevant
-    ts' = filter (\ (_:t:_) -> t /= 0) ts
-    findLowestValid tentative
-        | all (validTerm . evalStep tentative) ts' = tentative
-        | tentative == arbitraryMaximum = -1
-        | otherwise = findLowestValid (tentative + 1)
-    findHighestValid tentative
-        | tentative == arbitraryMaximum = arbitraryMaximum
-        | all (validTerm . evalStep tentative) ts' = findHighestValid (tentative + 1)
-        | otherwise = tentative - 1
-
-    lowestValid = findLowestValid 0
-    highestValid = findHighestValid lowestValid
-    tree = [(x, v:opt) | v <- [lowestValid..highestValid],
-        let ts'' = map (evalStep v) ts,
-        let opt = optimalAssignment ts'',
-        let x = sum $ map (eval (v:opt)) ts]
-    optimal = if null ts'
-        then optimalAssignment (map (evalStep 0) ts)
-        else (snd . minimum) tree
-    in map fst tree
-    where
-        validTerm (x:xs) = x >= 0 || any (/= 0) xs
--}
-
 -- solve a system of linear equations
---  returns a term for every component
-solveLin :: Matrix -> [Term]
+--  returns a term for every component and a maximum value for every free variable
+solveLin :: Matrix -> ([Term], [Double])
 solveLin mat = let
-    (fref, free) = gauss (map (map fromIntegral) mat)
-    ref = map (map roundFloat) fref
+    (ref, free) = gauss mat
     numFree = length free
     trivialTerms = [[if j == i then 1 else 0 | j <- [0..numFree]] | i <- [1..numFree]]
     toTerm line = let
@@ -201,11 +123,12 @@ solveLin mat = let
             | n `elem` free = -x : buildTerm xs (n+1)
             | otherwise = buildTerm xs (n+1)
         in reverse (buildTerm line 0)
-    in map toTerm ref ++ trivialTerms
+    max c = minimum . map last $ filter (\ line -> line !! c == 1) mat
+    in (map toTerm ref ++ trivialTerms, map max free)
 
 -- transform expanded coefficient matrix into RREF
 --  return matrix along with column indices of free variables
-gauss :: FMatrix -> (FMatrix, [Int])
+gauss :: Matrix -> (Matrix, [Int])
 gauss mat = let
     step mat n
         | length (head mat) == n+1 = (mat, [])
@@ -218,7 +141,7 @@ gauss mat = let
 -- perform gaussian elimination in column n
 --  returns the updated matrix and a bool whether the column has a pivot
 --  if it has no pivot, the matrix does not change
-gaussStep :: FMatrix -> Int -> (FMatrix, Bool)
+gaussStep :: Matrix -> Int -> (Matrix, Bool)
 gaussStep mat n = let
     -- 1. move a row with no 0 in the nth column to the nth position
     pivotToTop = let
