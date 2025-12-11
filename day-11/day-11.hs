@@ -23,6 +23,7 @@ process start visits devices = let
         n = name (head p)
         v' = if n `elem` visits && n `notElem` v then n:v else v
         in State p c v'
+    eval = foldr (\ (State _ c _) n -> c + n) 0
     loop [] = 0
     loop states = let
         states' = concatMap (step devices) states
@@ -33,9 +34,9 @@ process start visits devices = let
         updated = map updateVisits states'
         --  merge
         merged = mergeStates updated
-        in length done + loop merged
+        in eval done + loop merged
     startPaths = filter (\ (Device name _) -> name == start) devices
-    in loop [State [p] 0 [] | p <- startPaths]
+    in loop [State [p] 1 [] | p <- startPaths]
 
 -- add all possible next devices to the front of the path
 --  cycling paths are removed
