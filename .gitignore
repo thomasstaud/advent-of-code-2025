@@ -22,5 +22,5 @@ cabal.project.local~
 .HTF/
 .ghc.environment.*
 
-*/example
-*/input
+*example*
+*input*
