@@ -2,7 +2,7 @@ import Data.Char (digitToInt)
 import Data.Bits (Bits(..))
 
 part1 = sum . map (minLightPresses . toMachine) . lines
-part2 = map (minJoltPresses . toMachine) . lines
+part2 = sum . map (minJoltPresses . toMachine) . lines
 
 type Lights = Int -- binary encoded
 type Button = Int -- binary encoded
@@ -36,22 +36,20 @@ toMachine line = let
 minLightPresses :: Machine -> Int
 minLightPresses (Machine lights buttons _) = minimum . map length $ lightsCombinations buttons lights
 
+impossible = 1_000_000
 -- determine number of required button presses for the joltage of one machine
 minJoltPresses :: Machine -> Int
-minJoltPresses (Machine _ buttons joltage) = let
-    -- takes the LSB from every joltage number, representing them as lights
-    constructLights :: Joltage -> Lights
-    constructLights [] = 0
-    constructLights (x:xs) = x .&. 1 + shift (constructLights xs) 1
+minJoltPresses (Machine _ buttons joltage)
+    | all (== 0) joltage = 0 -- success
+    | any (< 0) joltage = impossible
+    | otherwise = let
     combinations = lightsCombinations buttons (constructLights joltage)
     -- checks one combination for its minimum score
     eval :: [Button] -> Int
-    eval [] = 1_000_000 -- impossible
     eval combo = let
         joltage' = [(j - length (filter (`testBit` i) combo)) `div` 2 | (j, i) <- zip joltage [0..]]
-        val = length combo + 2 * minJoltPresses (Machine 0 buttons joltage')
-        in if any (/= 0) joltage' then val else 0
-    in minimum $ map eval combinations
+        in length combo + 2 * minJoltPresses (Machine 0 buttons joltage')
+    in if null combinations then impossible else minimum $ map eval combinations
 
 lightsCombinations :: [Button] -> Lights -> [[Button]]
 lightsCombinations buttons lights  = let
@@ -61,5 +59,10 @@ lightsCombinations buttons lights  = let
     toButtons :: Int -> [Button]
     toButtons n = [b | (b, i) <- zip buttons [0..], testBit n i]
     isValid :: [Button] -> Bool
-    isValid bs = foldr1 xor bs == lights
-    in filter isValid (map toButtons [1..possibilities-1])
+    isValid bs = foldr xor 0 bs == lights
+    in filter isValid (map toButtons [0..possibilities-1])
+
+-- takes the LSB from every joltage number, representing them as lights
+constructLights :: Joltage -> Lights
+constructLights [] = 0
+constructLights (x:xs) = x .&. 1 + shift (constructLights xs) 1
