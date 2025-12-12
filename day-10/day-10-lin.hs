@@ -107,7 +107,7 @@ minimizeSum (terms, maxes) = let
     evalAssignment a = let
         ts = map (eval a) terms
         valid = all (\ t -> t >= 0 && t - fromIntegral (round t) < 0.01) ts
-        in if valid then sum ts else 100000000 -- could not find a solution
+        in if valid then sum ts else 100000 -- could not find a solution
     in minimum (map evalAssignment assignments)
 
 -- solve a system of linear equations
