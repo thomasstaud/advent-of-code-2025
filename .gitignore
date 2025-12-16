@@ -27,3 +27,6 @@ cabal.project.local~
 *example*
 *input*
 *result*
+*heavy*
+
+*ign*.hs

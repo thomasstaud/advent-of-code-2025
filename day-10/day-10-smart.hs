@@ -1,5 +1,10 @@
 import Data.Char (digitToInt)
 import Data.Bits (Bits(..))
+import qualified Data.Map.Strict as M
+
+main = do
+    input <- readFile "heavy.txt"
+    print $ part2 input
 
 part1 = sum . map (minLightPresses . toMachine) . lines
 part2 = sum . map (minJoltPresses . toMachine) . lines
@@ -32,24 +37,43 @@ toMachine line = let
         (tail, []) -> [read (takeWhile (/= '}') tail)]
     in Machine (parseLights lightStr) (map parseButton buttonStrs) (parseJoltage joltStr)
 
--- determine number of required button presses for the lights of one machine
+-- find required button presses for the *lights* of one machine
 minLightPresses :: Machine -> Int
 minLightPresses (Machine lights buttons _) = minimum . map length $ lightsCombinations buttons lights
 
 impossible = 1_000_000
--- determine number of required button presses for the joltage of one machine
+-- use memoization to avoid duplicate evaluation
+type Memo     = M.Map Joltage Int
+
+-- find required button presses for the *joltage* of one machine
 minJoltPresses :: Machine -> Int
-minJoltPresses (Machine _ buttons joltage)
-    | all (== 0) joltage = 0 -- success
-    | any (< 0) joltage = impossible
-    | otherwise = let
-    combinations = lightsCombinations buttons (constructLights joltage)
-    -- checks one combination for its minimum score
-    eval :: [Button] -> Int
-    eval combo = let
-        joltage' = [(j - length (filter (`testBit` i) combo)) `div` 2 | (j, i) <- zip joltage [0..]]
-        in length combo + 2 * minJoltPresses (Machine 0 buttons joltage')
-    in if null combinations then impossible else minimum $ map eval combinations
+minJoltPresses (Machine _ buttons joltage) = fst $ minimize M.empty joltage
+    where
+        -- TODO: implement light map here
+
+        minimize :: Memo -> Joltage -> (Int, Memo)
+        minimize memo j
+            | all (== 0) j = (0, memo) -- success
+            | any (< 0) j = (impossible, memo)
+            | Just v <- M.lookup j memo = (v, memo)
+            | otherwise = let
+            combos = lightsCombinations buttons (constructLights j)
+            (v, memo') = foldr (eval j) (impossible, memo) combos
+            in (v, M.insert j v memo)
+        
+        -- checks one combination for its minimum score
+        eval :: Joltage -> [Button] -> (Int, Memo) -> (Int, Memo)
+        eval j combo (best, memo) = let
+            subtractHits x i = let
+                hits = length [() | b <- combo, testBit b i]
+                in (x - hits) `div` 2
+            j' = zipWith subtractHits j [0..]
+            (v, memo') = minimize memo j'
+            in (min best (length combo + 2 * v), memo')
+
+
+
+-- j' = [(j - length (filter (`testBit` i) combo)) `div` 2 | (j, i) <- zip j [0..]]
 
 lightsCombinations :: [Button] -> Lights -> [[Button]]
 lightsCombinations buttons lights  = let
