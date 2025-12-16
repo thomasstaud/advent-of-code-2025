@@ -1,13 +1,16 @@
 import Data.Char (digitToInt)
 import Data.Bits (Bits(..))
+import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
 main = do
-    input <- readFile "heavy.txt"
-    print $ part2 input
+    input <- readFile "input.txt"
+    let machines = map toMachine $ lines input
+    print $ part1 machines
+    print $ part2 machines
 
-part1 = sum . map (minLightPresses . toMachine) . lines
-part2 = sum . map (minJoltPresses . toMachine) . lines
+part1 = sum . map minLightPresses
+part2 = sum . map minJoltPresses
 
 type Lights = Int -- binary encoded
 type Button = Int -- binary encoded
@@ -43,13 +46,14 @@ minLightPresses (Machine lights buttons _) = minimum . map length $ lightsCombin
 
 impossible = 1_000_000
 -- use memoization to avoid duplicate evaluation
-type Memo     = M.Map Joltage Int
+type Memo = M.Map Joltage Int
+type LightMemo = M.Map Lights [[Button]]
 
 -- find required button presses for the *joltage* of one machine
 minJoltPresses :: Machine -> Int
 minJoltPresses (Machine _ buttons joltage) = fst $ minimize M.empty joltage
     where
-        -- TODO: implement light map here
+        lightMemo = buildLightMemo buttons
 
         minimize :: Memo -> Joltage -> (Int, Memo)
         minimize memo j
@@ -57,9 +61,10 @@ minJoltPresses (Machine _ buttons joltage) = fst $ minimize M.empty joltage
             | any (< 0) j = (impossible, memo)
             | Just v <- M.lookup j memo = (v, memo)
             | otherwise = let
-            combos = lightsCombinations buttons (constructLights j)
-            (v, memo') = foldr (eval j) (impossible, memo) combos
-            in (v, M.insert j v memo)
+                lights = constructLights j
+                combos = M.findWithDefault [] lights lightMemo
+                (v, memo') = foldr (eval j) (impossible, memo) combos
+            in (v, M.insert j v memo')
         
         -- checks one combination for its minimum score
         eval :: Joltage -> [Button] -> (Int, Memo) -> (Int, Memo)
@@ -72,8 +77,17 @@ minJoltPresses (Machine _ buttons joltage) = fst $ minimize M.empty joltage
             in (min best (length combo + 2 * v), memo')
 
 
+-- "I'm already calculating the new joltage levels as I press each button, why don't I forget about keeping track of the lights and just check if the joltages are even."
 
 -- j' = [(j - length (filter (`testBit` i) combo)) `div` 2 | (j, i) <- zip j [0..]]
+
+buildLightMemo :: [Button] -> LightMemo
+buildLightMemo buttons =
+    M.fromListWith (++)
+      [ (foldr xor 0 bs, [bs])
+      | mask <- [0 :: Int .. (1 `shiftL` length buttons) - 1]
+      , let bs = [ b | (b,i) <- zip buttons [0..], testBit mask i ]
+      ]
 
 lightsCombinations :: [Button] -> Lights -> [[Button]]
 lightsCombinations buttons lights  = let
