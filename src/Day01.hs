@@ -1,4 +1,4 @@
-module Day01r(part1, part2) where
+module Day01(part1, part2) where
 
 part1 = process score1
 part2 = process score2
