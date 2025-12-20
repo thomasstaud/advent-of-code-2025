@@ -1,4 +1,9 @@
-module Day01(part1, part2) where
+module Day01(part1, part2, main) where
+
+main = do
+    input <- readFile "inputs/01.txt"
+    print $ part1 input
+    print $ part2 input
 
 part1 = process score1
 part2 = process score2

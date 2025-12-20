@@ -1,12 +1,12 @@
 {-# LANGUAGE NumericUnderscores #-}
-module Day10(part1, part2) where
+module Day10(part1, part2, main) where
 
 import Data.Char (digitToInt)
 import Data.Bits (Bits(..))
 import qualified Data.Map as M
 
 main = do
-    input <- readFile "input.txt"
+    input <- readFile "inputs/10.txt"
     print $ part1 input
     print $ part2 input
 
