@@ -1,5 +1,3 @@
-import Data.Char (ord, chr)
-
 part1 = process 2
 part2 = process 12
 

@@ -1,17 +1,20 @@
 {-# LANGUAGE NumericUnderscores #-}
-module Day10(part1, part2, main) where
+module Day10(main) where
 
 import Data.Char (digitToInt)
 import Data.Bits (Bits(..))
 import qualified Data.Map as M
 
 main = do
-    input <- readFile "inputs/10.txt"
+    file <- readFile "inputs/10.txt"
+    let input = parse file
     print $ part1 input
     print $ part2 input
 
-part1 = sum . map (minLightPresses . toMachine) . lines
-part2 = sum . map (minJoltPresses . toMachine) . lines
+part1 = sum . map minLightPresses
+part2 = sum . map minJoltPresses
+
+parse = map toMachine . lines
 
 type Lights = Int       -- bitmask
 type Button = Int       -- bitmask
